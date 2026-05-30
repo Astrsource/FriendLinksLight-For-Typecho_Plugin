@@ -41,24 +41,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $message = sprintf(_t('删除了 %d 个异常链接'), $del); break;
     }
 }
-/* ──────── 页面数据（安全获取）──────── */
+/* ──────── 页面数据──────── */
 $allowedSort = ['sort','created_desc','created_asc','title_asc','title_desc','random'];
 $currentSort  = $_GET['sortby'] ?? ($_COOKIE['friendlinks_sort'] ?? 'sort');
 $currentCategory = $_GET['category_id'] ?? 'all';
-// 安全的 per_page 值（必须为正整数且位于允许列表中）
 $perPageOptions = [10, 20, 50];
-$perPage = 10; // 默认值
+$perPage = 10;
 if (isset($_GET['per_page'])) {
     $val = (int)$_GET['per_page'];
     if (in_array($val, $perPageOptions, true)) {
         $perPage = $val;
     }
 }
-// 额外保护：永远不为 0 或负数
 $perPage = max(1, $perPage);
 $currentPage = isset($_GET['page']) ? max(1, intval($_GET['page'])) : 1;
 $totalCount = FriendLinksLight_Plugin::getLinksCount(true, $currentCategory);
-$totalPages = max(1, (int)ceil($totalCount / $perPage)); // 至少为 1
+$totalPages = max(1, (int)ceil($totalCount / $perPage));
 $offset = ($currentPage - 1) * $perPage;
 $links = FriendLinksLight_Plugin::getLinksPaginated(true, $currentSort, $currentCategory, $perPage, $offset);
 $cacheInfo = FriendLinksLight_Plugin::getCacheInfo();
@@ -119,6 +117,7 @@ include 'menu.php';
     .category-grid { display:flex; gap:12px; flex-wrap:wrap; }
     .category-card { background:#fff; border:1px solid #e0e0e0; border-radius:8px; padding:12px 16px; min-width:170px; }
     .toolbar { display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin:20px 0; }
+    .message.notice { transition: opacity 0.5s; }
 </style>
 
 <div class="friendlinks-panel">
@@ -139,7 +138,11 @@ include 'menu.php';
                     <div class="cat-meta">ID: <?php echo $cat['id']; ?> | <?php echo sprintf(_t('%d 条'), $categoryCounts[$cat['id']] ?? 0); ?></div>
                     <div class="cat-actions">
                         <button class="btn btn-sm" onclick='editCategory(<?php echo json_encode($cat); ?>)'>✏️</button>
-                        <form method="post" style="display:inline;"><input type="hidden" name="action" value="delete_category"><input type="hidden" name="id" value="<?php echo $cat['id']; ?>"><button class="btn btn-sm btn-danger">🗑️</button></form>
+                        <form method="post" style="display:inline;">
+                            <input type="hidden" name="action" value="delete_category">
+                            <input type="hidden" name="id" value="<?php echo $cat['id']; ?>">
+                            <button class="btn btn-sm btn-danger" onclick="return confirm('确定删除该分类？')">🗑️</button>
+                        </form>
                     </div>
                 </div>
             <?php endforeach; ?>
@@ -161,11 +164,23 @@ include 'menu.php';
 
     <!-- 工具栏 -->
     <div class="toolbar">
-        <button class="btn btn-primary" onclick="openModal('add')">➕ <?php _e('添加链接'); ?></button>
-        <form method="post" class="ajax-form"><input type="hidden" name="action" value="check_all"><button class="btn btn-warning">🔄 <?php _e('检查所有状态'); ?></button></form>
-        <form method="post" class="ajax-form"><input type="hidden" name="action" value="clear_cache"><button class="btn">🗑️ <?php _e('刷新缓存'); ?></button></form>
-        <form method="post" class="ajax-form"><input type="hidden" name="action" value="compact_sorts"><button class="btn">🔢 <?php _e('重整序号'); ?></button></form>
-        <form method="post" class="ajax-form" onsubmit="return confirm('确定删除所有异常链接？')"><input type="hidden" name="action" value="delete_dead"><button class="btn btn-danger">🗑️ <?php _e('删除异常链接'); ?></button></form>
+        <button class="btn btn-primary" onclick="openModal()">➕ <?php _e('添加链接'); ?></button>
+        <form method="post" class="ajax-form" data-confirm="确定要检查所有链接的状态吗？这可能耗时较长。">
+            <input type="hidden" name="action" value="check_all">
+            <button class="btn btn-warning">🔄 <?php _e('检查所有状态'); ?></button>
+        </form>
+        <form method="post" class="ajax-form">
+            <input type="hidden" name="action" value="clear_cache">
+            <button class="btn">🗑️ <?php _e('刷新缓存'); ?></button>
+        </form>
+        <form method="post" class="ajax-form">
+            <input type="hidden" name="action" value="compact_sorts">
+            <button class="btn">🔢 <?php _e('重整序号'); ?></button>
+        </form>
+        <form method="post" class="ajax-form" data-confirm="确定要删除所有异常链接吗？此操作不可恢复。">
+            <input type="hidden" name="action" value="delete_dead">
+            <button class="btn btn-danger">🗑️ <?php _e('删除异常链接'); ?></button>
+        </form>
         <div style="margin-left:auto; display:flex; gap:8px; align-items:center;">
             <label>分类：</label>
             <select id="categoryFilterSelect" style="padding:4px;">
@@ -216,8 +231,16 @@ include 'menu.php';
                     <td><?php echo $link['last_update'] ? date('Y-m-d', $link['last_update']) : '-'; ?></td>
                     <td class="actions">
                         <button class="btn btn-sm" onclick='editLink(<?php echo json_encode($link); ?>)'>编辑</button>
-                        <form method="post" style="display:inline;"><input type="hidden" name="action" value="check_status"><input type="hidden" name="id" value="<?php echo $link['id']; ?>"><button class="btn btn-sm btn-warning">检查</button></form>
-                        <form method="post" style="display:inline;" onsubmit="return confirm('确定删除？')"><input type="hidden" name="action" value="delete"><input type="hidden" name="id" value="<?php echo $link['id']; ?>"><button class="btn btn-sm btn-danger">删除</button></form>
+                        <form method="post" style="display:inline;">
+                            <input type="hidden" name="action" value="check_status">
+                            <input type="hidden" name="id" value="<?php echo $link['id']; ?>">
+                            <button class="btn btn-sm btn-warning">检查</button>
+                        </form>
+                        <form method="post" style="display:inline;">
+                            <input type="hidden" name="action" value="delete">
+                            <input type="hidden" name="id" value="<?php echo $link['id']; ?>">
+                            <button class="btn btn-sm btn-danger" onclick="return confirm('确定删除？')">删除</button>
+                        </form>
                     </td>
                 </tr>
             <?php endforeach; ?>
@@ -227,7 +250,6 @@ include 'menu.php';
         <?php echo $paginationHtml; ?>
     </div>
 
-    <!-- 详细使用说明 -->
     <div class="cron-info">
         <h3>📌 使用说明 (完整)</h3>
         <style>
@@ -272,8 +294,7 @@ include 'menu.php';
         </table>
     
         <h4>短代码示例</h4>
-        <pre class="usage-pre">
-    &lt;!-- 默认输出所有可见链接 --&gt;
+        <pre class="usage-pre">    &lt;!-- 默认输出所有可见链接 --&gt;
     [friendlinks]
     
     &lt;!-- 输出分类ID为2的链接，且追加卡片类 --&gt;
@@ -292,12 +313,11 @@ include 'menu.php';
         <h4>2. 模板函数调用</h4>
         <p>在主题模板中使用以下静态方法输出链接：</p>
         <table class="friendlinks-table" style="margin-top:8px;">
-            <tr><td style="width:250px;"><code>FriendLinksLight_Plugin::output()</code></td><td>输出所有可见链接（参数：容器类, 卡片类, 分类ID, 未分类模式）</td></tr>
+            <tbody><tr><td style="width:250px;"><code>FriendLinksLight_Plugin::output()</code></td><td>输出所有可见链接（参数：容器类, 卡片类, 分类ID, 未分类模式）</td></tr>
             <tr><td><code>FriendLinksLight_Plugin::outputDead()</code></td><td>仅输出异常链接（参数与 <code>output</code> 相同）</td></tr>
-        </table>
+        </tbody></table>
         <p>函数签名：</p>
-        <pre class="usage-pre">
-    public static function output(
+        <pre class="usage-pre">    public static function output(
         $containerClass = 'friendlinks-container',
         $cardClass = '',
         $categoryId = null,       // null=所有分类，数字=指定分类ID
@@ -307,8 +327,7 @@ include 'menu.php';
     </pre>
     
         <h5>模板调用示例</h5>
-        <pre class="usage-pre">
-    &lt;?php
+        <pre class="usage-pre">    &lt;?php
     // 默认方式
     FriendLinksLight_Plugin::output();
     
@@ -337,10 +356,9 @@ include 'menu.php';
     
         <h4>5. 定时任务 Cron</h4>
         <p>服务器定时触发，批量更新所有链接的存活状态：</p>
-        <pre class="usage-pre">
-    Cron URL：<?php echo htmlspecialchars($cronUrl); ?><br>
+        <pre class="usage-pre">    Cron URL：https://astrsource.com/friendlinkslight/cron<br>
     示例 (每 2 小时执行)：<br>
-    0 */2 * * * curl -s "<?php echo htmlspecialchars($cronUrl); ?>" > /dev/null 2>&1
+    0 */2 * * * curl -s "https://astrsource.com/friendlinkslight/cron" &gt; /dev/null 2&gt;&amp;1
     </pre>
         <p><strong>密钥</strong>：若插件设置中填写了 Cron 密钥，必须在 URL 中携带 <code>?key=你的密钥</code>，否则请求会被拒绝（HTTP 403）。</p>
     
@@ -402,6 +420,16 @@ include 'menu.php';
     var nextSortValue = <?php echo $nextSort; ?>;
     var nextCatSortValue = <?php echo $nextCatSort; ?>;
 
+    (function() {
+        var msg = document.querySelector('.message.notice');
+        if (msg) {
+            setTimeout(function() {
+                msg.style.opacity = '0';
+                setTimeout(function() { if (msg.parentNode) msg.remove(); }, 500);
+            }, 3000);
+        }
+    })();
+
     function openCategoryModal(){ document.getElementById('categoryModalTitle').textContent='添加分类'; document.getElementById('catFormAction').value='add_category'; document.getElementById('catId').value=''; document.getElementById('catName').value=''; document.getElementById('catSort').value=nextCatSortValue; document.getElementById('categoryModal').style.display='block'; }
     function editCategory(cat){ document.getElementById('categoryModalTitle').textContent='编辑分类'; document.getElementById('catFormAction').value='edit_category'; document.getElementById('catId').value=cat.id; document.getElementById('catName').value=cat.name; document.getElementById('catSort').value=cat.sort; document.getElementById('categoryModal').style.display='block'; }
     function closeCategoryModal(){ document.getElementById('categoryModal').style.display='none'; }
@@ -411,24 +439,55 @@ include 'menu.php';
     window.onclick=function(e){ if(e.target==document.getElementById('linkModal')) closeModal(); if(e.target==document.getElementById('categoryModal')) closeCategoryModal(); };
 
     document.addEventListener('DOMContentLoaded', function(){
-        document.getElementById('linkForm').addEventListener('submit', function(e){ e.preventDefault(); submitAjax(this); });
-        document.getElementById('categoryForm').addEventListener('submit', function(e){ e.preventDefault(); submitAjax(this); });
-        document.querySelectorAll('.ajax-form').forEach(f=>{ f.addEventListener('submit', function(e){ e.preventDefault(); submitAjax(this); }); });
+        document.getElementById('linkForm').addEventListener('submit', function(e){ e.preventDefault(); submitAjax(this, true); });
+        document.getElementById('categoryForm').addEventListener('submit', function(e){ e.preventDefault(); submitAjax(this, true); });
+        document.querySelectorAll('.ajax-form').forEach(f=>{
+            f.addEventListener('submit', function(e){
+                e.preventDefault();
+                var confirmMsg = this.getAttribute('data-confirm');
+                if (confirmMsg && !confirm(confirmMsg)) {
+                    return false;
+                }
+                submitAjax(this, true);
+            });
+        });
+
+        // 排序、筛选事件
         document.getElementById('sortSelect').addEventListener('change', function(){ loadTableBySort(this.value); });
         document.getElementById('refreshSortBtn').addEventListener('click', function(){ loadTableBySort(document.getElementById('sortSelect').value); });
         document.getElementById('categoryFilterSelect').addEventListener('change', function(){ loadTableBySort(document.getElementById('sortSelect').value); });
         bindPaginationEvents();
     });
 
-    function submitAjax(form){
+    /**
+     * Ajax 提交函数
+     * @param {HTMLFormElement} form
+     * @param {boolean} reload - 提交后是否刷新页面
+     */
+    function submitAjax(form, reload){
         var data = new FormData(form);
         var btn = form.querySelector('button[type="submit"]');
-        if(btn){ btn.disabled=true; btn.textContent='处理中...'; }
+        if(btn){ btn.disabled=true; var origText=btn.textContent; btn.textContent='处理中...'; }
         fetch(window.location.href, {method:'POST', body:data})
             .then(r=>{ if(!r.ok) throw new Error('Server error'); return r.text(); })
-            .then(html=>{ location.reload(); })
+            .then(html=>{
+                if (reload) {
+                    location.reload();
+                } else {
+                    // 局部更新表格等（用于排序/分页）
+                    var doc = new DOMParser().parseFromString(html, 'text/html');
+                    var newTable = doc.querySelector('.friendlinks-table');
+                    if(newTable) document.querySelector('.friendlinks-table').outerHTML = newTable.outerHTML;
+                    var newPagination = doc.querySelector('.friendlinks-pagination');
+                    if(newPagination) {
+                        var oldPag = document.querySelector('.friendlinks-pagination');
+                        if(oldPag) oldPag.outerHTML = newPagination.outerHTML;
+                    }
+                    bindPaginationEvents();
+                }
+            })
             .catch(e=>alert('操作失败'))
-            .finally(()=>{ if(btn){ btn.disabled=false; btn.textContent='保存'; } });
+            .finally(()=>{ if(btn){ btn.disabled=false; btn.textContent=origText; } });
     }
 
     function loadTableBySort(sortBy){
@@ -448,11 +507,25 @@ include 'menu.php';
             var newTable = doc.querySelector('.friendlinks-table');
             if(newTable) document.querySelector('.friendlinks-table').outerHTML = newTable.outerHTML;
             var newPagination = doc.querySelector('.friendlinks-pagination');
-            if(newPagination) document.querySelector('.friendlinks-pagination').outerHTML = newPagination.outerHTML;
+            if(newPagination) {
+                var oldPag = document.querySelector('.friendlinks-pagination');
+                if(oldPag) oldPag.outerHTML = newPagination.outerHTML;
+            }
             var newCache = doc.querySelector('.cache-info');
             if(newCache) document.querySelector('.cache-info').outerHTML = newCache.outerHTML;
+            var newCategory = doc.querySelector('.category-section');
+            if(newCategory) document.querySelector('.category-section').outerHTML = newCategory.outerHTML;
             window.history.replaceState(null, '', url);
             document.cookie = 'friendlinks_sort='+(new URL(url).searchParams.get('sortby')||'sort')+';path=/;max-age=31536000;SameSite=Lax';
+            bindEditButtons();
+            bindPaginationEvents();
+        });
+    }
+
+    function bindEditButtons(){
+        document.querySelectorAll('.actions button[onclick^="editLink"]').forEach(btn => {
+            var fn = btn.getAttribute('onclick');
+            if (fn) btn.onclick = function() { eval(fn); };
         });
     }
 
