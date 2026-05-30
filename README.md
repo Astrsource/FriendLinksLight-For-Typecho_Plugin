@@ -316,6 +316,15 @@ Linux 服务器示例（每 2 小时执行一次）：
 friendlinks_rendered_a1b2c3d4e5f6...html
 ```
 
+| 短代码 | 是否使用渲染缓存 | 说明 |
+|--------|------------------|------|
+| `[friendlinks]` | ✅ **会** | 默认参数，完全满足缓存条件 |
+| `[friendlinks dead]` | ❌ **不会** | 因为 `deadOnly = true`，缓存直接跳过 |
+| `[friendlinks category_id="2"]` | ❌ **不会** | 指定了 `category_id`，不满足第一个条件 |
+| `[friendlinks include_uncategorized="0"]` | ❌ **不会** | `uncategorizedMode` 变为 `0`，不满足第二个条件 |
+| `[friendlinks container_class="my-links"]` | ✅ **会** | 仅改变了容器类名，仍满足所有条件（但缓存键会包含类名） |
+| `[friendlinks card_class="compact"]` | ✅ **会** | 同样满足条件，缓存键不同 |
+
 ### 10.2 缓存清除时机
 
 以下操作会自动清除所有渲染缓存：
