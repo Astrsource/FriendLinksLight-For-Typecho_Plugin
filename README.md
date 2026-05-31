@@ -1,6 +1,6 @@
 # FriendLinksLight 使用说明
 
-> **版本**：v1.0.0
+> **版本**：v1.0.0  
 > **作者**：Astrsource  
 > **适用**：Typecho 1.3 PHP 8.2+  
 > **存储**：JSON 本地文件（无需数据库表）  
